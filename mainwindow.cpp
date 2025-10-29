@@ -48,10 +48,15 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::startStreaming()
 {
-    const QUrl url = QUrl::fromUserInput(ui->urlLineEdit->text().trimmed());
+    QUrl url = QUrl::fromUserInput(ui->urlLineEdit->text().trimmed());
     if (!url.isValid()) {
         updateStatus(tr("Invalid URL"), true);
         return;
+    }
+
+    if (url.path().isEmpty() || url.path() == QStringLiteral("/")) {
+        url.setPath(QStringLiteral("/stream"));
+        ui->urlLineEdit->setText(url.toString());
     }
 
     stopStreamingInternal(QString(), false, true);
@@ -68,8 +73,14 @@ void MainWindow::startStreaming()
     m_buffer.clear();
 
     QNetworkRequest request(url);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+#elif QT_VERSION >= QT_VERSION_CHECK(5, 6, 0)
     request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+#endif
     request.setRawHeader("User-Agent", QByteArrayLiteral("QtESP32CameraViewer/1.0"));
+    request.setRawHeader("Accept", QByteArrayLiteral("multipart/x-mixed-replace"));
 
     m_currentReply = m_networkManager->get(request);
 
@@ -129,7 +140,24 @@ void MainWindow::handleFinished()
         return;
     }
 
-    stopStreamingInternal(tr("Stream closed by server."), false, false);
+    const bool receivedFrame = !m_lastFrame.isNull();
+    const QString contentType = m_currentReply->header(QNetworkRequest::ContentTypeHeader).toString();
+
+    QString message;
+    bool isError = false;
+
+    if (!receivedFrame) {
+        if (contentType.startsWith(QStringLiteral("text/html"), Qt::CaseInsensitive)) {
+            message = tr("No MJPEG stream detected. Ensure the URL points to the /stream endpoint.");
+        } else {
+            message = tr("Stream closed before any frames were received.");
+        }
+        isError = true;
+    } else {
+        message = tr("Stream closed by server.");
+    }
+
+    stopStreamingInternal(message, isError, false);
 }
 
 void MainWindow::handleError(QNetworkReply::NetworkError)

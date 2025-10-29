@@ -27,7 +27,10 @@
       <item>
        <widget class="QLineEdit" name="urlLineEdit">
         <property name="text">
-         <string>http://192.168.43.95</string>
+         <string>http://192.168.43.95/stream</string>
+        </property>
+        <property name="placeholderText">
+         <string>http://&lt;esp32-address&gt;/stream</string>
         </property>
        </widget>
       </item>
