@@ -68,7 +68,7 @@ void MainWindow::startStreaming()
     m_buffer.clear();
 
     QNetworkRequest request(url);
-    request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, true);
     request.setRawHeader("User-Agent", QByteArrayLiteral("QtESP32CameraViewer/1.0"));
 
     m_currentReply = m_networkManager->get(request);
