@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QStatusBar>
 #include <QByteArray>
+#include <QLineEdit>
 
 namespace {
 const QByteArray kJpegStartMarker("\xFF\xD8", 2);
@@ -30,6 +31,13 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->startButton, &QPushButton::clicked, this, &MainWindow::startStreaming);
     connect(ui->stopButton, &QPushButton::clicked, this, &MainWindow::stopStreaming);
+    connect(ui->sendButton, &QPushButton::clicked, this, &MainWindow::sendMessage);
+    connect(ui->messageLineEdit, &QLineEdit::returnPressed, this, &MainWindow::sendMessage);
+    connect(ui->messageLineEdit, &QLineEdit::textChanged, this, [this](const QString &text) {
+        ui->sendButton->setEnabled(!text.trimmed().isEmpty());
+    });
+
+    ui->sendButton->setEnabled(false);
 
     updateStatus(tr("Idle"));
 }
@@ -86,6 +94,64 @@ void MainWindow::startStreaming()
 void MainWindow::stopStreaming()
 {
     stopStreamingInternal(tr("Stream stopped."), false, true);
+}
+
+void MainWindow::sendMessage()
+{
+    const QString message = ui->messageLineEdit->text();
+    if (message.trimmed().isEmpty()) {
+        return;
+    }
+
+    const QUrl streamUrl = QUrl::fromUserInput(ui->urlLineEdit->text().trimmed());
+    if (!streamUrl.isValid() || streamUrl.host().isEmpty()) {
+        updateStatus(tr("Invalid URL"), true);
+        return;
+    }
+
+    QUrl messageUrl;
+    const QString scheme = streamUrl.scheme().isEmpty() ? QStringLiteral("http") : streamUrl.scheme();
+    messageUrl.setScheme(scheme);
+    messageUrl.setHost(streamUrl.host());
+    if (!streamUrl.userInfo().isEmpty()) {
+        messageUrl.setUserInfo(streamUrl.userInfo());
+    }
+
+    const int streamPort = streamUrl.port();
+    if (streamPort > 0) {
+        const int messagePort = streamPort - 1;
+        if (messagePort > 0) {
+            messageUrl.setPort(messagePort);
+        }
+    }
+
+    messageUrl.setPath(QStringLiteral("/message"));
+
+    if (!messageUrl.isValid()) {
+        updateStatus(tr("Invalid message URL"), true);
+        return;
+    }
+
+    QNetworkRequest request(messageUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("text/plain; charset=utf-8"));
+
+    QNetworkReply *reply = m_networkManager->post(request, message.toUtf8());
+    ui->sendButton->setEnabled(false);
+    statusBar()->showMessage(tr("Sending message..."));
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        const QNetworkReply::NetworkError error = reply->error();
+        reply->deleteLater();
+
+        if (error != QNetworkReply::NoError) {
+            updateStatus(tr("Failed to send message: %1").arg(reply->errorString()), true);
+        } else {
+            statusBar()->showMessage(tr("Message sent"), 3000);
+            ui->messageLineEdit->clear();
+        }
+
+        ui->sendButton->setEnabled(!ui->messageLineEdit->text().trimmed().isEmpty());
+    });
 }
 
 void MainWindow::handleReadyRead()

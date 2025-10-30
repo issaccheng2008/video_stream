@@ -20,6 +20,7 @@
 #include "sdkconfig.h"
 #include "camera_index.h"
 #include "board_config.h"
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32) && defined(CONFIG_ARDUHAL_ESP_LOG)
 #include "esp32-hal-log.h"
@@ -316,6 +317,41 @@ static esp_err_t parse_get(httpd_req_t *req, char **obuf) {
   }
   httpd_resp_send_404(req);
   return ESP_FAIL;
+}
+
+static esp_err_t message_handler(httpd_req_t *req) {
+  const size_t total_len = req->content_len;
+  char *buf = (char *)malloc(total_len + 1);
+  if (!buf) {
+    httpd_resp_send_500(req);
+    return ESP_FAIL;
+  }
+
+  size_t received = 0;
+  while (received < total_len) {
+    int ret = httpd_req_recv(req, buf + received, total_len - received);
+    if (ret <= 0) {
+      if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+        continue;
+      }
+      free(buf);
+      httpd_resp_send_500(req);
+      return ESP_FAIL;
+    }
+    received += ret;
+  }
+
+  buf[received] = '\0';
+
+  Serial.print(buf);
+  Serial.print('\n');
+  log_i("Received message: %s", buf);
+
+  free(buf);
+
+  httpd_resp_set_type(req, "text/plain");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  return httpd_resp_send(req, "OK", HTTPD_RESP_USE_STRLEN);
 }
 
 static esp_err_t cmd_handler(httpd_req_t *req) {
@@ -710,6 +746,19 @@ void startCameraServer() {
 #endif
   };
 
+  httpd_uri_t message_uri = {
+    .uri = "/message",
+    .method = HTTP_POST,
+    .handler = message_handler,
+    .user_ctx = NULL
+#ifdef CONFIG_HTTPD_WS_SUPPORT
+    ,
+    .is_websocket = true,
+    .handle_ws_control_frames = false,
+    .supported_subprotocol = NULL
+#endif
+  };
+
   httpd_uri_t capture_uri = {
     .uri = "/capture",
     .method = HTTP_GET,
@@ -820,6 +869,7 @@ void startCameraServer() {
   if (httpd_start(&camera_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(camera_httpd, &index_uri);
     httpd_register_uri_handler(camera_httpd, &cmd_uri);
+    httpd_register_uri_handler(camera_httpd, &message_uri);
     httpd_register_uri_handler(camera_httpd, &status_uri);
     httpd_register_uri_handler(camera_httpd, &capture_uri);
     httpd_register_uri_handler(camera_httpd, &bmp_uri);
