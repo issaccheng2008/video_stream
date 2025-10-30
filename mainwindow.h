@@ -28,6 +28,7 @@ protected:
 private slots:
     void startStreaming();
     void stopStreaming();
+    void sendMessage();
     void handleReadyRead();
     void handleFinished();
     void handleError(QNetworkReply::NetworkError code);

@@ -14,7 +14,7 @@
    <string>ESP32 Camera Stream</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,1,0">
+   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,1,0">
     <item>
      <layout class="QHBoxLayout" name="urlLayout">
       <item>
@@ -45,6 +45,24 @@
         </property>
         <property name="text">
          <string>Stop</string>
+        </property>
+      </widget>
+     </item>
+    </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="messageLayout">
+      <item>
+       <widget class="QLineEdit" name="messageLineEdit">
+        <property name="placeholderText">
+         <string>Type a message to send...</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="sendButton">
+        <property name="text">
+         <string>Send</string>
         </property>
        </widget>
       </item>
